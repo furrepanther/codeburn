@@ -520,10 +520,6 @@ function InteractiveDashboard({ initialProjects, initialPeriod, initialProvider,
       }
       if (!cancelled) {
         setDetectedProviders(found)
-        if (found.length > 1) {
-          const range = getDateRange(period)
-          for (const name of found) parseAllSessions(range, name).catch(() => {})
-        }
       }
     }
     detect()
