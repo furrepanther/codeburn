@@ -144,7 +144,6 @@ type ScanData = {
   toolCalls: ToolCall[]
   projectCwds: Set<string>
   apiCalls: ApiCallMeta[]
-  versions: Set<string>
   userMessages: string[]
 }
 
@@ -199,7 +198,6 @@ type ScanFileResult = {
   calls: ToolCall[]
   cwds: string[]
   apiCalls: ApiCallMeta[]
-  versions: string[]
   userMessages: string[]
 }
 
@@ -224,12 +222,11 @@ export async function scanJsonlFile(
   let content: string
   try {
     content = await readFile(filePath, 'utf-8')
-  } catch { return { calls: [], cwds: [], apiCalls: [], versions: [], userMessages: [] } }
+  } catch { return { calls: [], cwds: [], apiCalls: [], userMessages: [] } }
 
   const calls: ToolCall[] = []
   const cwds: string[] = []
   const apiCalls: ApiCallMeta[] = []
-  const versions: string[] = []
   const userMessages: string[] = []
   const sessionId = basename(filePath, '.jsonl')
   let lastVersion = ''
@@ -246,7 +243,6 @@ export async function scanJsonlFile(
     const recent = isRecent(ts, recentCutoffMs)
 
     if (entry.cwd && typeof entry.cwd === 'string' && withinRange) cwds.push(entry.cwd)
-    if (entry.version && typeof entry.version === 'string' && withinRange) versions.push(entry.version)
 
     if (entry.type === 'user') {
       if (!withinRange) continue
@@ -289,7 +285,7 @@ export async function scanJsonlFile(
     }
   }
 
-  return { calls, cwds, apiCalls, versions, userMessages }
+  return { calls, cwds, apiCalls, userMessages }
 }
 
 async function scanSessions(dateRange?: DateRange): Promise<ScanData> {
@@ -297,7 +293,6 @@ async function scanSessions(dateRange?: DateRange): Promise<ScanData> {
   const allCalls: ToolCall[] = []
   const allCwds = new Set<string>()
   const allApiCalls: ApiCallMeta[] = []
-  const allVersions = new Set<string>()
   const allUserMessages: string[] = []
 
   const tasks: Array<{ file: string; project: string }> = []
@@ -310,15 +305,14 @@ async function scanSessions(dateRange?: DateRange): Promise<ScanData> {
   }
 
   await runWithConcurrency(tasks, FILE_READ_CONCURRENCY, async ({ file, project }) => {
-    const { calls, cwds, apiCalls, versions, userMessages } = await scanJsonlFile(file, project, dateRange)
+    const { calls, cwds, apiCalls, userMessages } = await scanJsonlFile(file, project, dateRange)
     allCalls.push(...calls)
     for (const cwd of cwds) allCwds.add(cwd)
     allApiCalls.push(...apiCalls)
-    for (const v of versions) if (v) allVersions.add(v)
     allUserMessages.push(...userMessages)
   })
 
-  return { toolCalls: allCalls, projectCwds: allCwds, apiCalls: allApiCalls, versions: allVersions, userMessages: allUserMessages }
+  return { toolCalls: allCalls, projectCwds: allCwds, apiCalls: allApiCalls, userMessages: allUserMessages }
 }
 
 // ============================================================================
@@ -677,16 +671,20 @@ export function detectLowReadEditRatio(calls: ToolCall[], dateRange?: DateRange)
   }
 }
 
+const DEFAULT_CACHE_BASELINE_TOKENS = 50_000
+const CACHE_BASELINE_QUANTILE = 0.25
+const CACHE_BLOAT_MULTIPLIER = 1.4
+const CACHE_VERSION_MIN_SAMPLES = 5
+const CACHE_VERSION_DIFF_THRESHOLD = 10_000
+
 function computeBudgetAwareCacheBaseline(projects: ProjectSummary[]): number {
   const sessions = projects.flatMap(p => p.sessions)
-  if (sessions.length === 0) return 50_000
+  if (sessions.length === 0) return DEFAULT_CACHE_BASELINE_TOKENS
   const cacheWrites = sessions.map(s => s.totalCacheWriteTokens).filter(n => n > 0)
-  if (cacheWrites.length < MIN_API_CALLS_FOR_CACHE) return 50_000
+  if (cacheWrites.length < MIN_API_CALLS_FOR_CACHE) return DEFAULT_CACHE_BASELINE_TOKENS
   const sorted = cacheWrites.sort((a, b) => a - b)
-  return sorted[Math.floor(sorted.length * 0.25)] || 50_000
+  return sorted[Math.floor(sorted.length * CACHE_BASELINE_QUANTILE)] || DEFAULT_CACHE_BASELINE_TOKENS
 }
-
-const CACHE_BLOAT_MULTIPLIER = 1.4
 
 export function detectCacheBloat(apiCalls: ApiCallMeta[], projects: ProjectSummary[], dateRange?: DateRange): WasteFinding | null {
   if (apiCalls.length < MIN_API_CALLS_FOR_CACHE) return null
@@ -713,7 +711,7 @@ export function detectCacheBloat(apiCalls: ApiCallMeta[], projects: ProjectSumma
     versionCounts.set(call.version, entry)
   }
   const versionAvgs = [...versionCounts.entries()]
-    .filter(([, d]) => d.count >= 5)
+    .filter(([, d]) => d.count >= CACHE_VERSION_MIN_SAMPLES)
     .map(([v, d]) => ({ version: v, avg: Math.round(d.total / d.count) }))
     .sort((a, b) => b.avg - a.avg)
 
@@ -724,7 +722,7 @@ export function detectCacheBloat(apiCalls: ApiCallMeta[], projects: ProjectSumma
   if (versionAvgs.length >= 2) {
     const [high, ...rest] = versionAvgs
     const low = rest[rest.length - 1]
-    if (high.avg - low.avg > 10_000) {
+    if (high.avg - low.avg > CACHE_VERSION_DIFF_THRESHOLD) {
       versionNote = ` Version ${high.version} averages ${formatTokens(high.avg)} vs ${low.version} at ${formatTokens(low.avg)}.`
     }
   }
