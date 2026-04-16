@@ -424,34 +424,6 @@ function PeriodTabs({ active, providerName, showProvider }: { active: Period; pr
   )
 }
 
-function ContextBudgetPanel({ budget, pw }: { budget: ContextBudget; pw: number }) {
-  const pct = ((budget.total / budget.modelContext) * 100).toFixed(1)
-  const available = budget.modelContext - budget.total
-  const items: Array<{ label: string; tokens: number; color: string }> = [
-    { label: 'System base', tokens: budget.systemBase, color: '#5B9EF5' },
-    { label: `MCP tools (${budget.mcpTools.count})`, tokens: budget.mcpTools.tokens, color: '#F55BE0' },
-    { label: `Skills (${budget.skills.count})`, tokens: budget.skills.tokens, color: '#F5C85B' },
-    { label: `Memory (${budget.memory.count})`, tokens: budget.memory.tokens, color: '#5BF5A0' },
-  ]
-  const maxTokens = Math.max(...items.map(i => i.tokens))
-  const bw = 6
-  return (
-    <Panel title="Context Budget" color="#7B9EF5" width={pw}>
-      <Text dimColor wrap="truncate-end">{''.padEnd(bw + 20)}{'tokens'.padStart(8)}</Text>
-      {items.filter(i => i.tokens > 0).map(item => (
-        <Text key={item.label} wrap="truncate-end">
-          <HBar value={item.tokens} max={maxTokens} width={bw} />
-          <Text color={item.color}> {fit(item.label, 19)}</Text>
-          <Text>{formatTokens(item.tokens).padStart(8)}</Text>
-        </Text>
-      ))}
-      <Text dimColor wrap="truncate-end">
-        Overhead: {formatTokens(budget.total)} ({pct}%)   Free: {formatTokens(available)}
-      </Text>
-    </Panel>
-  )
-}
-
 function FindingAction({ action }: { action: WasteAction }) {
   const lines = action.type === 'file-content' ? action.content.split('\n') : action.type === 'command' ? action.text.split('\n') : [action.text]
   return (<><Text dimColor>{action.label}</Text>{lines.map((line, i) => <Text key={i} color="#5BF5E0">  {line}</Text>)}</>)

@@ -626,7 +626,7 @@ export function detectBloatedClaudeMd(projectCwds: Set<string>): WasteFinding | 
 const READ_TOOL_NAMES = new Set(['Read', 'Grep', 'Glob', 'FileReadTool', 'GrepTool', 'GlobTool'])
 const EDIT_TOOL_NAMES = new Set(['Edit', 'Write', 'FileEditTool', 'FileWriteTool', 'NotebookEdit'])
 
-export function detectLowReadEditRatio(calls: ToolCall[], dateRange?: DateRange): WasteFinding | null {
+export function detectLowReadEditRatio(calls: ToolCall[]): WasteFinding | null {
   let reads = 0
   let edits = 0
   let recentEdits = 0
@@ -1007,7 +1007,7 @@ export async function scanAndDetect(
   const findings: WasteFinding[] = []
   const syncDetectors: Array<() => WasteFinding | null> = [
     () => detectCacheBloat(apiCalls, projects, dateRange),
-    () => detectLowReadEditRatio(toolCalls, dateRange),
+    () => detectLowReadEditRatio(toolCalls),
     () => detectJunkReads(toolCalls, dateRange),
     () => detectDuplicateReads(toolCalls, dateRange),
     () => detectUnusedMcp(toolCalls, projects, projectCwds),
