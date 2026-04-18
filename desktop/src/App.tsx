@@ -124,22 +124,40 @@ export function App() {
         ))}
       </nav>
 
-      <section className="activity">
-        <h2 className="section-title">Activity</h2>
-        {payload.current.topActivities.length === 0 && (
-          <p className="empty">No activity for this period.</p>
-        )}
-        {payload.current.topActivities.map(a => (
-          <div key={a.name} className="row">
-            <div className="row-label">{a.name}</div>
-            <div className="row-cost">{formatCompactCurrency(a.cost, currency)}</div>
-            <div className="row-turns">{a.turns}</div>
-            <div className="row-oneshot">
-              {a.oneShotRate == null ? '—' : `${Math.round(a.oneShotRate * 100)}%`}
+      {!loading && payload.current.calls === 0 && payload.current.sessions === 0 ? (
+        <section className="empty-state">
+          <h2 className="section-title">No session data yet</h2>
+          <p>
+            CodeBurn reads local session logs from your AI coding tools. It looks like
+            none of the supported tools have written any sessions on this machine yet.
+          </p>
+          <p>Supported sources:</p>
+          <ul>
+            <li><code>~/.claude/projects/</code> (Claude Code)</li>
+            <li><code>~/.codex/sessions/</code> (Codex CLI)</li>
+            <li>Cursor IDE local database</li>
+            <li>GitHub Copilot session events</li>
+          </ul>
+          <p>Run one of those tools for a session, then hit Refresh.</p>
+        </section>
+      ) : (
+        <section className="activity">
+          <h2 className="section-title">Activity</h2>
+          {payload.current.topActivities.length === 0 && (
+            <p className="empty">No activity for this period.</p>
+          )}
+          {payload.current.topActivities.map(a => (
+            <div key={a.name} className="row">
+              <div className="row-label">{a.name}</div>
+              <div className="row-cost">{formatCompactCurrency(a.cost, currency)}</div>
+              <div className="row-turns">{a.turns}</div>
+              <div className="row-oneshot">
+                {a.oneShotRate == null ? '—' : `${Math.round(a.oneShotRate * 100)}%`}
+              </div>
             </div>
-          </div>
-        ))}
-      </section>
+          ))}
+        </section>
+      )}
 
       {payload.optimize.findingCount > 0 && (
         <section className="findings">

@@ -64,10 +64,11 @@ pub fn run() {
 }
 
 fn build_tray(app: &AppHandle) -> tauri::Result<()> {
+    let dashboard = MenuItem::with_id(app, "dashboard", "Show Dashboard", true, None::<&str>)?;
     let refresh = MenuItem::with_id(app, "refresh", "Refresh", true, None::<&str>)?;
     let report = MenuItem::with_id(app, "report", "Open Full Report", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Quit CodeBurn", true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&refresh, &report, &quit])?;
+    let menu = Menu::with_items(app, &[&dashboard, &refresh, &report, &quit])?;
 
     TrayIconBuilder::with_id("codeburn-tray")
         .tooltip("CodeBurn")
@@ -75,6 +76,7 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id.as_ref() {
             "quit" => app.exit(0),
+            "dashboard" => toggle_popover(app),
             "refresh" => {
                 // Nudge the webview so it re-requests the payload. The front-end listens for
                 // this event and kicks off a new fetch_payload command.
