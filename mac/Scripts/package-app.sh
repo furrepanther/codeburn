@@ -85,10 +85,10 @@ cat > "${BUNDLE}/Contents/PkgInfo" <<'PKG'
 APPL????
 PKG
 
-# Ad-hoc sign so macOS treats the bundle as internally consistent. This does NOT give us a
-# recognisable developer name in Finder (that needs the $99 Developer ID cert), but it
-# satisfies macOS's minimum bundle-validity checks on 14+ and prevents some Gatekeeper edge
-# cases on managed Macs.
+# Ad-hoc sign so macOS treats the bundle as internally consistent. This satisfies the
+# minimum bundle-validity checks on macOS 14+ and prevents a class of Gatekeeper edge
+# cases on managed Macs. A Developer ID signature (separate setup) would additionally
+# surface the publisher name in Finder; not required here.
 echo "▸ Ad-hoc signing..."
 codesign --force --sign - --timestamp=none --deep "${BUNDLE}" 2>/dev/null || true
 codesign --verify --deep --strict "${BUNDLE}" 2>/dev/null || echo "  (signature verify skipped)"

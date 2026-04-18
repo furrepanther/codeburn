@@ -16,7 +16,7 @@ One command:
 npx codeburn menubar
 ```
 
-That's it. The command downloads the latest signed `.app` from GitHub Releases, drops it into `~/Applications`, clears Gatekeeper quarantine, and launches it. Re-running it upgrades in place with `--force`, or just launches the existing copy otherwise.
+That's it. The command downloads the latest `.app` from GitHub Releases, drops it into `~/Applications`, clears Gatekeeper quarantine, and launches it. Re-running it upgrades in place with `--force`, or just launches the existing copy otherwise.
 
 If you already have the CLI installed globally (`npm install -g codeburn`), `codeburn menubar` works the same way.
 
