@@ -35,12 +35,44 @@ const PERIODS = [
     {id: 'all', label: 'All Time'},
 ];
 
+const PROVIDERS = [
+    {id: 'all', label: 'All'},
+    {id: 'claude', label: 'Claude'},
+    {id: 'codex', label: 'Codex'},
+    {id: 'cursor', label: 'Cursor'},
+    {id: 'copilot', label: 'Copilot'},
+];
+
+// Matches the 17 currencies the Mac menubar ships with. Symbols fall back to the
+// ISO code with a trailing space for anything less common.
+const CURRENCIES = [
+    {code: 'USD', symbol: '$'},
+    {code: 'EUR', symbol: '€'},
+    {code: 'GBP', symbol: '£'},
+    {code: 'CAD', symbol: 'C$'},
+    {code: 'AUD', symbol: 'A$'},
+    {code: 'JPY', symbol: '¥'},
+    {code: 'INR', symbol: '₹'},
+    {code: 'BRL', symbol: 'R$'},
+    {code: 'CHF', symbol: 'CHF '},
+    {code: 'SEK', symbol: 'kr '},
+    {code: 'SGD', symbol: 'S$'},
+    {code: 'HKD', symbol: 'HK$'},
+    {code: 'KRW', symbol: '₩'},
+    {code: 'MXN', symbol: 'MX$'},
+    {code: 'ZAR', symbol: 'R '},
+    {code: 'DKK', symbol: 'kr '},
+    {code: 'CNY', symbol: '¥'},
+];
+
 const CodeburnIndicator = GObject.registerClass(
 class CodeburnIndicator extends PanelMenu.Button {
     _init() {
         super._init(0.0, 'CodeBurn');
 
         this._period = 'today';
+        this._provider = 'all';
+        this._currency = this._loadCurrency();
         this._loading = false;
         this._timeout = null;
         this._payload = null;
@@ -93,6 +125,19 @@ class CodeburnIndicator extends PanelMenu.Button {
 
         this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
 
+        // Agent (provider filter) submenu
+        this._providerSubmenu = new PopupMenu.PopupSubMenuMenuItem(this._providerLabel());
+        for (const p of PROVIDERS) {
+            const item = new PopupMenu.PopupMenuItem(p.label);
+            item.connect('activate', () => {
+                this._provider = p.id;
+                this._providerSubmenu.label.set_text(this._providerLabel());
+                this._refresh();
+            });
+            this._providerSubmenu.menu.addMenuItem(item);
+        }
+        this.menu.addMenuItem(this._providerSubmenu);
+
         // Period switcher submenu
         this._periodSubmenu = new PopupMenu.PopupSubMenuMenuItem(this._periodLabel());
         for (const p of PERIODS) {
@@ -105,6 +150,15 @@ class CodeburnIndicator extends PanelMenu.Button {
             this._periodSubmenu.menu.addMenuItem(item);
         }
         this.menu.addMenuItem(this._periodSubmenu);
+
+        // Currency submenu
+        this._currencySubmenu = new PopupMenu.PopupSubMenuMenuItem(this._currencyLabel());
+        for (const c of CURRENCIES) {
+            const item = new PopupMenu.PopupMenuItem(c.code);
+            item.connect('activate', () => this._setCurrency(c.code));
+            this._currencySubmenu.menu.addMenuItem(item);
+        }
+        this.menu.addMenuItem(this._currencySubmenu);
 
         this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
 
@@ -133,13 +187,57 @@ class CodeburnIndicator extends PanelMenu.Button {
         this.menu.addMenuItem(refresh);
 
         const openReport = new PopupMenu.PopupMenuItem('Open Full Report');
-        openReport.connect('activate', () => this._spawnTerminal([CODEBURN_BIN, 'report', '--period', this._period]));
+        openReport.connect('activate', () => this._spawnTerminal([CODEBURN_BIN, 'report', '--period', this._period, '--provider', this._provider]));
         this.menu.addMenuItem(openReport);
     }
 
     _periodLabel() {
         const p = PERIODS.find(x => x.id === this._period);
         return `Period · ${p ? p.label : this._period}`;
+    }
+
+    _providerLabel() {
+        const p = PROVIDERS.find(x => x.id === this._provider);
+        return `Agent · ${p ? p.label : this._provider}`;
+    }
+
+    _currencyLabel() {
+        return `Currency · ${this._currency.code}`;
+    }
+
+    _loadCurrency() {
+        const configPath = GLib.build_filenamev([GLib.get_home_dir(), '.config', 'codeburn', 'config.json']);
+        try {
+            const [ok, contents] = GLib.file_get_contents(configPath);
+            if (ok) {
+                const config = JSON.parse(new TextDecoder().decode(contents));
+                if (config.currency?.code) {
+                    const known = CURRENCIES.find(c => c.code === config.currency.code);
+                    if (known) return known;
+                    return {code: config.currency.code, symbol: config.currency.symbol || `${config.currency.code} `};
+                }
+            }
+        } catch (_) {
+            // fall through to default
+        }
+        return CURRENCIES[0];
+    }
+
+    _setCurrency(code) {
+        let proc;
+        try {
+            proc = Gio.Subprocess.new(
+                [CODEBURN_BIN, 'currency', code],
+                Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE,
+            );
+        } catch (_) {
+            return;
+        }
+        proc.wait_async(null, () => {
+            this._currency = this._loadCurrency();
+            this._currencySubmenu.label.set_text(this._currencyLabel());
+            this._refresh();
+        });
     }
 
     _refresh() {
@@ -150,7 +248,7 @@ class CodeburnIndicator extends PanelMenu.Button {
         let proc;
         try {
             proc = Gio.Subprocess.new(
-                [CODEBURN_BIN, 'status', '--format', 'menubar-json', '--period', this._period],
+                [CODEBURN_BIN, 'status', '--format', 'menubar-json', '--period', this._period, '--provider', this._provider],
                 Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE,
             );
         } catch (e) {
@@ -183,7 +281,7 @@ class CodeburnIndicator extends PanelMenu.Button {
     _render(payload) {
         const current = payload?.current ?? {};
         const cost = Number(current.cost ?? 0);
-        const formatted = formatUsd(cost);
+        const formatted = formatCost(cost, this._currency);
 
         this._label.set_text(formatted);
 
@@ -229,7 +327,7 @@ class CodeburnIndicator extends PanelMenu.Button {
             const tail = oneShot == null
                 ? `${a.turns} turns`
                 : `${a.turns} turns   ${Math.round(Number(oneShot) * 100)}% 1-shot`;
-            const line = `  ${a.name.padEnd(14)} ${formatUsd(a.cost).padStart(8)}   ${tail}`;
+            const line = `  ${a.name.padEnd(14)} ${formatCost(a.cost, this._currency).padStart(8)}   ${tail}`;
             const item = new PopupMenu.PopupMenuItem(line, {reactive: false});
             item.label.style_class = 'codeburn-row';
             this._activitySection.addMenuItem(item);
@@ -244,7 +342,7 @@ class CodeburnIndicator extends PanelMenu.Button {
         this._modelsSection.addMenuItem(title);
         for (const m of models.slice(0, TOP_MODELS)) {
             const calls = Number(m.calls ?? 0).toLocaleString();
-            const line = `  ${m.name.padEnd(18)} ${formatUsd(m.cost).padStart(8)}   ${calls} calls`;
+            const line = `  ${m.name.padEnd(18)} ${formatCost(m.cost, this._currency).padStart(8)}   ${calls} calls`;
             const item = new PopupMenu.PopupMenuItem(line, {reactive: false});
             item.label.style_class = 'codeburn-row';
             this._modelsSection.addMenuItem(item);
@@ -260,7 +358,7 @@ class CodeburnIndicator extends PanelMenu.Button {
         title.label.style_class = 'codeburn-section-title';
         this._providersSection.addMenuItem(title);
         for (const [name, cost] of entries.slice(0, TOP_PROVIDERS)) {
-            const line = `  ${capitalize(name).padEnd(14)} ${formatUsd(Number(cost)).padStart(8)}`;
+            const line = `  ${capitalize(name).padEnd(14)} ${formatCost(Number(cost), this._currency).padStart(8)}`;
             const item = new PopupMenu.PopupMenuItem(line, {reactive: false});
             item.label.style_class = 'codeburn-row';
             this._providersSection.addMenuItem(item);
@@ -272,7 +370,7 @@ class CodeburnIndicator extends PanelMenu.Button {
         const count = Number(optimize?.findingCount ?? 0);
         if (count === 0) return;
         const savings = Number(optimize?.savingsUSD ?? 0);
-        const text = `⚠  ${count} optimize findings   save ~${formatUsd(savings)}`;
+        const text = `⚠  ${count} optimize findings   save ~${formatCost(savings, this._currency)}`;
         const item = new PopupMenu.PopupMenuItem(text);
         item.label.style_class = 'codeburn-findings';
         item.connect('activate', () => this._spawnTerminal([CODEBURN_BIN, 'optimize']));
@@ -324,13 +422,14 @@ class CodeburnIndicator extends PanelMenu.Button {
     }
 });
 
-function formatUsd(value) {
+function formatCost(value, currency) {
     const n = Number(value) || 0;
     const abs = Math.abs(n);
+    const symbol = currency?.symbol || '$';
     if (abs >= 1000) {
-        return `$${(n / 1000).toFixed(abs >= 10000 ? 0 : 1)}k`;
+        return `${symbol}${(n / 1000).toFixed(abs >= 10000 ? 0 : 1)}k`;
     }
-    return `$${n.toFixed(2)}`;
+    return `${symbol}${n.toFixed(2)}`;
 }
 
 function formatTime(date) {
