@@ -1,5 +1,10 @@
 node_modules/
 dist/
+# desktop/dist/ is a Vite build output that gets regenerated on every `npm run build`,
+# but we keep a placeholder index.html tracked so Tauri's compile-time frontendDist check
+# passes on a fresh clone. See desktop/.gitignore for the matching rule.
+!/desktop/dist/
+!/desktop/dist/index.html
 *.tgz
 
 # OS
