@@ -35,6 +35,17 @@ const PERIODS = [
     {id: 'all', label: 'All'},
 ];
 
+// Secondary view pills (below period tabs, matches Mac popover). Each pill swaps
+// the content area between Activity+Models and a dedicated insight view.
+const INSIGHTS = [
+    {id: 'activity', label: 'Activity'},
+    {id: 'trend',    label: 'Trend'   },
+    {id: 'forecast', label: 'Forecast'},
+    {id: 'pulse',    label: 'Pulse'   },
+    {id: 'stats',    label: 'Stats'   },
+    {id: 'plan',     label: 'Plan'    },
+];
+
 const PROVIDERS = [
     {id: 'all', label: 'All'},
     {id: 'claude', label: 'Claude'},
@@ -71,6 +82,7 @@ class CodeburnIndicator extends PanelMenu.Button {
         super._init(0.0, 'CodeBurn');
 
         this._period = 'today';
+        this._insight = 'activity';
         this._availableProviders = this._detectAvailableProviders();
         // If only one provider is installed, use it directly so the popup doesn't
         // pretend to be filtering when there's nothing to filter. Otherwise start
@@ -125,7 +137,9 @@ class CodeburnIndicator extends PanelMenu.Button {
         this._buildAgentTabs();
         this._buildHero();
         this._buildPeriodTabs();
-        this._buildActivitySection();
+        this._buildInsightPills();
+        this._buildTokenChart();
+        this._buildContentArea();
         this._buildFindingsSection();
         this._buildFooter();
 
@@ -261,13 +275,58 @@ class CodeburnIndicator extends PanelMenu.Button {
         }
     }
 
-    _buildActivitySection() {
-        const section = new St.BoxLayout({vertical: true, style_class: 'codeburn-activity'});
-        const title = new St.Label({text: 'Activity', style_class: 'codeburn-section-title'});
-        section.add_child(title);
+    _buildInsightPills() {
+        const row = new St.BoxLayout({style_class: 'codeburn-insight-row'});
+        this._insightPills = new Map();
+        for (const i of INSIGHTS) {
+            const btn = new St.Button({
+                label: i.label,
+                style_class: 'codeburn-insight-pill',
+                can_focus: true,
+                x_expand: true,
+            });
+            btn.connect('clicked', () => {
+                this._insight = i.id;
+                this._updateInsightPillStyle();
+                this._renderContent();
+            });
+            row.add_child(btn);
+            this._insightPills.set(i.id, btn);
+        }
+        this._root.add_child(row);
+        this._updateInsightPillStyle();
+    }
+
+    _updateInsightPillStyle() {
+        for (const [id, btn] of this._insightPills) {
+            if (id === this._insight) btn.add_style_class_name('codeburn-insight-pill-active');
+            else btn.remove_style_class_name('codeburn-insight-pill-active');
+        }
+    }
+
+    /// 19-day token histogram, matches the Mac Trend chart that sits below the
+    /// hero. Each bar scales to the top-token day; colors come from the brand
+    /// palette. Populated from payload.history.daily.
+    _buildTokenChart() {
+        const chart = new St.BoxLayout({vertical: true, style_class: 'codeburn-chart'});
+        const header = new St.BoxLayout({style_class: 'codeburn-chart-header'});
+        this._chartLabel = new St.Label({text: 'Tokens', style_class: 'codeburn-chart-label', x_expand: true});
+        this._chartTotal = new St.Label({text: '', style_class: 'codeburn-chart-total'});
+        header.add_child(this._chartLabel);
+        header.add_child(this._chartTotal);
+        chart.add_child(header);
+        this._chartBars = new St.BoxLayout({style_class: 'codeburn-chart-bars'});
+        chart.add_child(this._chartBars);
+        this._root.add_child(chart);
+    }
+
+    /// Swappable content area: Activity (default), Trend, Forecast, Pulse,
+    /// Stats, or Plan view — driven by this._insight.
+    _buildContentArea() {
+        this._contentArea = new St.BoxLayout({vertical: true, style_class: 'codeburn-content'});
         this._activityRows = new St.BoxLayout({vertical: true, style_class: 'codeburn-activity-rows'});
-        section.add_child(this._activityRows);
-        this._root.add_child(section);
+        this._modelsRows = new St.BoxLayout({vertical: true, style_class: 'codeburn-models-rows'});
+        this._root.add_child(this._contentArea);
     }
 
     _buildFindingsSection() {
@@ -441,24 +500,195 @@ class CodeburnIndicator extends PanelMenu.Button {
         const sessions = Number(current.sessions ?? 0);
         this._heroMeta.set_text(`${calls.toLocaleString()} calls   ${sessions} sessions`);
 
-        this._renderActivity(Array.isArray(current.topActivities) ? current.topActivities : []);
+        this._renderChart(payload?.history?.daily ?? []);
+        this._renderContent();
         this._renderFindings(payload?.optimize ?? {});
 
         const updated = payload?.generated ? formatTime(new Date(payload.generated)) : '';
         this._updatedLabel.set_text(updated ? `Updated ${updated}` : '');
     }
 
-    _renderActivity(activities) {
-        this._activityRows.destroy_all_children();
-        if (!activities.length) {
-            const empty = new St.Label({text: 'No activity for this period', style_class: 'codeburn-empty'});
-            this._activityRows.add_child(empty);
+    _renderChart(daily) {
+        this._chartBars.destroy_all_children();
+        if (!daily.length) {
+            this._chartTotal.set_text('');
             return;
         }
-        const maxCost = activities.reduce((m, a) => Math.max(m, Number(a.cost) || 0), 0) || 1;
-        for (const a of activities.slice(0, TOP_ACTIVITIES)) {
-            this._activityRows.add_child(this._buildActivityRow(a, maxCost));
+        const window = daily.slice(-19); // last 19 days, matches Mac Trend chart
+        const totals = window.map(d => Number(d.inputTokens || 0) + Number(d.outputTokens || 0) + Number(d.cacheReadTokens || 0) + Number(d.cacheWriteTokens || 0));
+        const maxTotal = Math.max(...totals, 1);
+        const totalAll = totals.reduce((a, b) => a + b, 0);
+        this._chartTotal.set_text(`${formatTokensCompact(totalAll)} tokens`);
+        const CHART_HEIGHT = 52;
+        const BAR_WIDTH = 12;
+        for (let i = 0; i < window.length; i++) {
+            const h = Math.max(2, Math.round((totals[i] / maxTotal) * CHART_HEIGHT));
+            const col = new St.BoxLayout({vertical: true, style_class: 'codeburn-chart-col'});
+            const spacer = new St.Widget({style_class: 'codeburn-chart-spacer'});
+            spacer.set_height(CHART_HEIGHT - h);
+            const bar = new St.Widget({style_class: 'codeburn-chart-bar'});
+            bar.set_width(BAR_WIDTH);
+            bar.set_height(h);
+            col.add_child(spacer);
+            col.add_child(bar);
+            this._chartBars.add_child(col);
         }
+    }
+
+    _renderContent() {
+        this._contentArea.destroy_all_children();
+        switch (this._insight) {
+            case 'trend':    return this._renderTrendView();
+            case 'forecast': return this._renderForecastView();
+            case 'pulse':    return this._renderPulseView();
+            case 'stats':    return this._renderStatsView();
+            case 'plan':     return this._renderPlanView();
+            default:         return this._renderActivityView();
+        }
+    }
+
+    _renderActivityView() {
+        const current = this._payload?.current ?? {};
+        this._contentArea.add_child(this._sectionTitle('Activity'));
+        const rows = new St.BoxLayout({vertical: true, style_class: 'codeburn-activity-rows'});
+        const activities = Array.isArray(current.topActivities) ? current.topActivities : [];
+        if (!activities.length) {
+            rows.add_child(new St.Label({text: 'No activity for this period', style_class: 'codeburn-empty'}));
+        } else {
+            const maxCost = activities.reduce((m, a) => Math.max(m, Number(a.cost) || 0), 0) || 1;
+            for (const a of activities.slice(0, TOP_ACTIVITIES)) {
+                rows.add_child(this._buildActivityRow(a, maxCost));
+            }
+        }
+        this._contentArea.add_child(rows);
+
+        const models = Array.isArray(current.topModels) ? current.topModels : [];
+        if (models.length) {
+            this._contentArea.add_child(this._sectionTitle('Models'));
+            const mrows = new St.BoxLayout({vertical: true, style_class: 'codeburn-models-rows'});
+            for (const m of models.slice(0, 3)) {
+                mrows.add_child(this._buildModelRow(m));
+            }
+            this._contentArea.add_child(mrows);
+        }
+    }
+
+    _renderTrendView() {
+        const daily = this._payload?.history?.daily ?? [];
+        this._contentArea.add_child(this._sectionTitle('Trend'));
+        if (!daily.length) {
+            this._contentArea.add_child(new St.Label({text: 'Not enough history yet', style_class: 'codeburn-empty'}));
+            return;
+        }
+        const recent = daily.slice(-7).reverse();
+        for (const d of recent) {
+            const row = new St.BoxLayout({style_class: 'codeburn-trend-row'});
+            row.add_child(new St.Label({text: d.date, style_class: 'codeburn-trend-date', x_expand: true}));
+            row.add_child(new St.Label({text: formatCost(d.cost, this._currency, this._fxRate), style_class: 'codeburn-trend-cost'}));
+            row.add_child(new St.Label({text: `${Number(d.calls).toLocaleString()} calls`, style_class: 'codeburn-trend-calls'}));
+            this._contentArea.add_child(row);
+        }
+    }
+
+    _renderForecastView() {
+        const daily = this._payload?.history?.daily ?? [];
+        this._contentArea.add_child(this._sectionTitle('Forecast'));
+        if (daily.length < 3) {
+            this._contentArea.add_child(new St.Label({text: 'Need at least 3 days of history', style_class: 'codeburn-empty'}));
+            return;
+        }
+        const last7 = daily.slice(-7);
+        const avg = last7.reduce((s, d) => s + Number(d.cost || 0), 0) / last7.length;
+        const today = daily.at(-1);
+        const yesterday = daily.at(-2);
+        const wowDelta = yesterday ? ((Number(today.cost || 0) - Number(yesterday.cost || 0)) / Math.max(Number(yesterday.cost || 0), 1)) * 100 : 0;
+        const now = new Date();
+        const dayOfMonth = now.getUTCDate();
+        const daysInMonth = new Date(now.getUTCFullYear(), now.getUTCMonth() + 1, 0).getUTCDate();
+        const monthProjection = avg * daysInMonth;
+
+        this._contentArea.add_child(this._kvRow('7-day avg', formatCost(avg, this._currency, this._fxRate)));
+        this._contentArea.add_child(this._kvRow('Yesterday', yesterday ? formatCost(yesterday.cost, this._currency, this._fxRate) : '-'));
+        this._contentArea.add_child(this._kvRow('Day-over-day', `${wowDelta > 0 ? '+' : ''}${wowDelta.toFixed(1)}%`));
+        this._contentArea.add_child(this._kvRow('Month projection', formatCost(monthProjection, this._currency, this._fxRate)));
+        this._contentArea.add_child(this._kvRow('Days elapsed', `${dayOfMonth} of ${daysInMonth}`));
+    }
+
+    _renderPulseView() {
+        const current = this._payload?.current ?? {};
+        const daily = this._payload?.history?.daily ?? [];
+        this._contentArea.add_child(this._sectionTitle('Pulse'));
+        const row = new St.BoxLayout({style_class: 'codeburn-pulse-row'});
+        row.add_child(this._pulseTile(formatCost(current.cost, this._currency, this._fxRate), 'cost'));
+        row.add_child(this._pulseTile(Number(current.calls || 0).toLocaleString(), 'calls'));
+        row.add_child(this._pulseTile(`${Number(current.cacheHitPercent || 0).toFixed(0)}%`, 'cache hit'));
+        this._contentArea.add_child(row);
+        // Last 7 days mini
+        if (daily.length) {
+            this._contentArea.add_child(this._sectionTitle('Last 7 days'));
+            const last7 = daily.slice(-7);
+            const sumCost = last7.reduce((s, d) => s + Number(d.cost || 0), 0);
+            const sumCalls = last7.reduce((s, d) => s + Number(d.calls || 0), 0);
+            const peakDay = last7.reduce((best, d) => Number(d.cost || 0) > Number(best.cost || 0) ? d : best, last7[0]);
+            this._contentArea.add_child(this._kvRow('Total spend', formatCost(sumCost, this._currency, this._fxRate)));
+            this._contentArea.add_child(this._kvRow('Total calls', Number(sumCalls).toLocaleString()));
+            this._contentArea.add_child(this._kvRow('Peak day', `${peakDay?.date || '-'}   ${formatCost(peakDay?.cost, this._currency, this._fxRate)}`));
+        }
+    }
+
+    _renderStatsView() {
+        const current = this._payload?.current ?? {};
+        const daily = this._payload?.history?.daily ?? [];
+        this._contentArea.add_child(this._sectionTitle('Stats'));
+        const models = Array.isArray(current.topModels) ? current.topModels : [];
+        const favModel = models[0]?.name ?? '-';
+        const activeDays = daily.filter(d => Number(d.cost || 0) > 0).length;
+        const peakDay = daily.reduce((best, d) => Number(d.cost || 0) > Number((best || {}).cost || 0) ? d : best, null);
+        // Simple streak: consecutive recent non-zero days
+        let streak = 0;
+        for (let i = daily.length - 1; i >= 0; i--) {
+            if (Number(daily[i].cost || 0) > 0) streak++; else break;
+        }
+        this._contentArea.add_child(this._kvRow('Favorite model', favModel));
+        this._contentArea.add_child(this._kvRow('Active days', `${activeDays}`));
+        this._contentArea.add_child(this._kvRow('Current streak', `${streak} days`));
+        if (peakDay) {
+            this._contentArea.add_child(this._kvRow('Peak day', `${peakDay.date}   ${formatCost(peakDay.cost, this._currency, this._fxRate)}`));
+        }
+    }
+
+    _renderPlanView() {
+        this._contentArea.add_child(this._sectionTitle('Plan'));
+        this._contentArea.add_child(new St.Label({
+            text: 'Claude OAuth subscription tracking is macOS-only for now. Coming to Linux in a future release.',
+            style_class: 'codeburn-empty',
+        }));
+    }
+
+    _sectionTitle(text) {
+        return new St.Label({text, style_class: 'codeburn-section-title'});
+    }
+
+    _kvRow(label, value) {
+        const row = new St.BoxLayout({style_class: 'codeburn-kv-row'});
+        row.add_child(new St.Label({text: label, style_class: 'codeburn-kv-label', x_expand: true}));
+        row.add_child(new St.Label({text: String(value ?? '-'), style_class: 'codeburn-kv-value'}));
+        return row;
+    }
+
+    _pulseTile(value, label) {
+        const tile = new St.BoxLayout({vertical: true, style_class: 'codeburn-pulse-tile', x_expand: true});
+        tile.add_child(new St.Label({text: value, style_class: 'codeburn-pulse-value'}));
+        tile.add_child(new St.Label({text: label, style_class: 'codeburn-pulse-label'}));
+        return tile;
+    }
+
+    _buildModelRow(model) {
+        const row = new St.BoxLayout({style_class: 'codeburn-model-row'});
+        row.add_child(new St.Label({text: model.name, style_class: 'codeburn-model-name', x_expand: true}));
+        row.add_child(new St.Label({text: formatCost(model.cost, this._currency, this._fxRate), style_class: 'codeburn-model-cost'}));
+        row.add_child(new St.Label({text: `${Number(model.calls || 0).toLocaleString()}`, style_class: 'codeburn-model-calls'}));
+        return row;
     }
 
     _buildActivityRow(activity, maxCost) {
@@ -566,6 +796,14 @@ function formatCost(value, currency, rate = 1) {
         return `${symbol}${(n / 1000).toFixed(abs >= 10000 ? 0 : 1)}k`;
     }
     return `${symbol}${n.toFixed(2)}`;
+}
+
+function formatTokensCompact(n) {
+    const v = Number(n) || 0;
+    if (v >= 1_000_000_000) return `${(v / 1_000_000_000).toFixed(1)}B`;
+    if (v >= 1_000_000)     return `${(v / 1_000_000).toFixed(1)}M`;
+    if (v >= 1000)          return `${(v / 1000).toFixed(1)}k`;
+    return String(v);
 }
 
 function formatTime(date) {

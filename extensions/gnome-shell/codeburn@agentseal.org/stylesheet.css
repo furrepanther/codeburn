@@ -256,6 +256,147 @@
     padding: 0 16px 10px 16px;
 }
 
+/* ---- insight pills row ---- */
+.codeburn-insight-row {
+    padding: 4px 10px 8px 10px;
+    spacing: 4px;
+}
+.codeburn-insight-pill {
+    padding: 4px 4px;
+    border-radius: 6px;
+    font-size: 10.5px;
+    font-weight: 500;
+    background: transparent;
+    border: none;
+    opacity: 0.65;
+    transition-duration: 80ms;
+}
+.codeburn-insight-pill:hover {
+    background: rgba(255, 140, 66, 0.08);
+    opacity: 1;
+}
+.codeburn-insight-pill-active {
+    background: rgba(255, 140, 66, 0.18);
+    color: #ff8c42;
+    opacity: 1;
+    font-weight: 600;
+}
+
+/* ---- token histogram chart ---- */
+.codeburn-chart {
+    padding: 0 16px 10px 16px;
+    spacing: 4px;
+}
+.codeburn-chart-header {
+    spacing: 6px;
+}
+.codeburn-chart-label {
+    font-weight: 600;
+    font-size: 11px;
+    opacity: 0.6;
+}
+.codeburn-chart-total {
+    font-family: monospace;
+    font-size: 11px;
+    opacity: 0.7;
+    color: #ff8c42;
+}
+.codeburn-chart-bars {
+    spacing: 2px;
+    height: 52px;
+}
+.codeburn-chart-col {
+    width: 12px;
+    height: 52px;
+}
+.codeburn-chart-spacer {
+    background: transparent;
+}
+.codeburn-chart-bar {
+    background: linear-gradient(to top, #c9521d, #ff8c42);
+    border-radius: 2px 2px 0 0;
+}
+
+/* ---- trend, pulse, stats, kv rows ---- */
+.codeburn-content {
+    padding: 6px 16px 10px 16px;
+    spacing: 6px;
+}
+.codeburn-trend-row,
+.codeburn-kv-row {
+    padding: 4px 0;
+    spacing: 8px;
+}
+.codeburn-trend-date,
+.codeburn-kv-label {
+    font-size: 11.5px;
+    font-weight: 500;
+}
+.codeburn-trend-cost,
+.codeburn-kv-value {
+    font-family: monospace;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: #ffd700;
+}
+.codeburn-trend-calls {
+    font-size: 10.5px;
+    opacity: 0.6;
+    min-width: 62px;
+    text-align: right;
+}
+
+/* ---- pulse tiles ---- */
+.codeburn-pulse-row {
+    spacing: 6px;
+    padding: 4px 0;
+}
+.codeburn-pulse-tile {
+    padding: 10px 8px;
+    border-radius: 8px;
+    background: rgba(255, 140, 66, 0.08);
+    spacing: 2px;
+}
+.codeburn-pulse-value {
+    font-size: 16px;
+    font-weight: 700;
+    color: #ff8c42;
+    font-family: monospace;
+}
+.codeburn-pulse-label {
+    font-size: 10px;
+    opacity: 0.6;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+/* ---- models rows ---- */
+.codeburn-models-rows {
+    spacing: 3px;
+    padding-top: 4px;
+}
+.codeburn-model-row {
+    spacing: 8px;
+    padding: 2px 0;
+}
+.codeburn-model-name {
+    font-size: 11.5px;
+}
+.codeburn-model-cost {
+    font-family: monospace;
+    font-size: 11.5px;
+    color: #ffd700;
+    min-width: 60px;
+    text-align: right;
+}
+.codeburn-model-calls {
+    font-family: monospace;
+    font-size: 10.5px;
+    opacity: 0.6;
+    min-width: 60px;
+    text-align: right;
+}
+
 /* ---- dark / light theme hooks ---- */
 .codeburn-light .codeburn-bar-track {
     background-color: rgba(0, 0, 0, 0.08);
