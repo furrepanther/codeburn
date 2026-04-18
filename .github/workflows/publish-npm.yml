@@ -25,15 +25,14 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          # Node 24 (LTS) ships with npm 11.x, which supports OIDC trusted
+          # publishing natively. Node 22 on GitHub hosted runners currently
+          # pins to a broken npm 10.9.7 (runner-images#13883) and any
+          # self-upgrade from within that toolcache crashes on a missing
+          # promise-retry module, so bumping the runtime is the cleanest
+          # fix.
+          node-version: '24'
           registry-url: 'https://registry.npmjs.org'
-
-      - name: Upgrade npm for trusted publishing
-        # Node 22 ships with npm 10.x; npm OIDC trusted publishing requires
-        # npm 11.5.1+. Without this, the publish step silently falls back
-        # to the empty NODE_AUTH_TOKEN written by setup-node and the
-        # registry returns 404.
-        run: npm install -g npm@latest
 
       - name: Verify tag matches package.json
         run: |
