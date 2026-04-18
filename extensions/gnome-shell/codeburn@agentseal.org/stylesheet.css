@@ -1,0 +1,35 @@
+.codeburn-panel {
+    spacing: 4px;
+}
+
+.codeburn-flame {
+    font-size: 14px;
+}
+
+.codeburn-label {
+    font-weight: 500;
+    padding-left: 2px;
+    padding-right: 2px;
+}
+
+.codeburn-header {
+    font-weight: 600;
+    color: #ff8c42;
+}
+
+.codeburn-activity {
+    font-family: monospace;
+    font-size: 11px;
+    padding-left: 8px;
+}
+
+.codeburn-empty {
+    font-style: italic;
+    color: rgba(255, 255, 255, 0.5);
+    padding-left: 8px;
+}
+
+.codeburn-findings {
+    color: #ff8c42;
+    font-weight: 500;
+}

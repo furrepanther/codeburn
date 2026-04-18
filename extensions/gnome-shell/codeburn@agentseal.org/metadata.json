@@ -1,0 +1,8 @@
+{
+  "uuid": "codeburn@agentseal.org",
+  "name": "CodeBurn",
+  "description": "Ambient AI coding cost tracker for Claude Code, Codex, Cursor, and Copilot. Shows today's spend in the top panel with a dashboard popover.",
+  "shell-version": ["45", "46", "47", "48"],
+  "url": "https://github.com/AgentSeal/codeburn",
+  "session-modes": ["user"]
+}
