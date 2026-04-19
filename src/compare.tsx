@@ -30,7 +30,7 @@ function formatValue(value: number | null, fmt: ComparisonRow['formatFn']): stri
 }
 
 function shortName(model: string): string {
-  return model.replace(/^claude-/, '')
+  return model.replace(/^claude-/, '').replace(/-\d{8}$/, '')
 }
 
 function daysOfData(first: string, last: string): number {
@@ -98,7 +98,7 @@ function ModelSelector({ models, onSelect, onBack }: ModelSelectorProps) {
             <Text key={m.model}>
               <Text color={isCursor ? ORANGE : undefined}>{prefix}</Text>
               <Text bold={isSelected} color={isSelected ? GREEN : undefined}>
-                {m.model.padEnd(MODEL_NAME_COL)}
+                {shortName(m.model).padEnd(MODEL_NAME_COL)}
               </Text>
               <Text>{m.calls.toLocaleString().padStart(8)} calls</Text>
               <Text color={GOLD}>{formatCost(m.cost).padStart(10)}</Text>
@@ -150,9 +150,9 @@ function ComparisonResults({ modelA, modelB, rows, onBack }: ComparisonResultsPr
     <Box flexDirection="column" paddingX={2} paddingY={1}>
       <Box flexDirection="column" borderStyle="round" borderColor={ORANGE} paddingX={1}>
         <Text>
-          <Text bold color={ORANGE}>{modelA.model}</Text>
+          <Text bold color={ORANGE}>{nameA}</Text>
           <Text dimColor>  vs  </Text>
-          <Text bold color={ORANGE}>{modelB.model}</Text>
+          <Text bold color={ORANGE}>{nameB}</Text>
         </Text>
         <Text> </Text>
         <Text>
