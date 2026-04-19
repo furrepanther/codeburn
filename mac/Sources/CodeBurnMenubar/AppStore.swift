@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-private let cacheTTLSeconds: TimeInterval = 300
+private let cacheTTLSeconds: TimeInterval = 30
 
 struct CachedPayload {
     let payload: MenubarPayload
@@ -52,17 +52,15 @@ final class AppStore {
         payload.optimize.findingCount
     }
 
-    /// Switch to a period. Uses cached payload if fresh; otherwise fetches.
+    /// Switch to a period. Always fetches fresh data so the user never sees stale numbers.
     func switchTo(period: Period) async {
         selectedPeriod = period
-        if let cached = cache[currentKey], cached.isFresh { return }
         await refresh(includeOptimize: true)
     }
 
-    /// Switch to a provider filter. Uses cached payload if fresh; otherwise fetches.
+    /// Switch to a provider filter. Always fetches fresh data so the user never sees stale numbers.
     func switchTo(provider: ProviderFilter) async {
         selectedProvider = provider
-        if let cached = cache[currentKey], cached.isFresh { return }
         await refresh(includeOptimize: true)
     }
 

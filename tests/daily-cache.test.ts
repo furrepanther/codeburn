@@ -117,7 +117,7 @@ describe('addNewDays', () => {
     expect(updated.lastComputedDate).toBe('2026-04-10')
   })
 
-  it('skips days already present in the cache (first write wins)', () => {
+  it('replaces existing days with incoming data (last write wins)', () => {
     const base: DailyCache = {
       version: DAILY_CACHE_VERSION,
       lastComputedDate: '2026-04-08',
@@ -125,7 +125,7 @@ describe('addNewDays', () => {
     }
     const updated = addNewDays(base, [emptyDay('2026-04-08', 99)], '2026-04-08')
     const aprilEight = updated.days.find(d => d.date === '2026-04-08')!
-    expect(aprilEight.cost).toBe(5)
+    expect(aprilEight.cost).toBe(99)
   })
 
   it('does not regress lastComputedDate if incoming newestDate is older', () => {

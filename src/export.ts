@@ -3,6 +3,7 @@ import { dirname, join, resolve } from 'path'
 
 import { CATEGORY_LABELS, type ProjectSummary, type TaskCategory } from './types.js'
 import { getCurrency, convertCost } from './currency.js'
+import { dateKey } from './day-aggregator.js'
 
 function escCsv(s: string): string {
   const sanitized = /^[=+\-@]/.test(s) ? `'${s}` : s
@@ -48,7 +49,7 @@ function buildDailyRows(projects: ProjectSummary[], period: string): Row[] {
     for (const session of project.sessions) {
       for (const turn of session.turns) {
         if (!turn.timestamp) continue
-        const day = turn.timestamp.slice(0, 10)
+        const day = dateKey(turn.timestamp)
         if (!daily[day]) {
           daily[day] = { cost: 0, calls: 0, input: 0, output: 0, cacheRead: 0, cacheWrite: 0, sessions: new Set() }
         }
@@ -182,6 +183,7 @@ function buildProjectRows(projects: ProjectSummary[]): Row[] {
     .map(p => ({
       Project: p.projectPath,
       [`Cost (${code})`]: round2(convertCost(p.totalCostUSD)),
+      [`Avg/Session (${code})`]: p.sessions.length > 0 ? round2(convertCost(p.totalCostUSD / p.sessions.length)) : '',
       'Share (%)': pct(p.totalCostUSD, total),
       'API Calls': p.totalApiCalls,
       Sessions: p.sessions.length,

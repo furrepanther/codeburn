@@ -4,7 +4,7 @@ import { mkdir, open, readFile, rename, unlink } from 'fs/promises'
 import { homedir } from 'os'
 import { join } from 'path'
 
-export const DAILY_CACHE_VERSION = 2
+export const DAILY_CACHE_VERSION = 3
 const DAILY_CACHE_FILENAME = 'daily-cache.json'
 
 export type DailyEntry = {
@@ -91,14 +91,11 @@ export async function saveDailyCache(cache: DailyCache): Promise<void> {
 }
 
 export function addNewDays(cache: DailyCache, incoming: DailyEntry[], newestDate: string): DailyCache {
-  const seen = new Set(cache.days.map(d => d.date))
-  const merged = [...cache.days]
+  const byDate = new Map(cache.days.map(d => [d.date, d]))
   for (const day of incoming) {
-    if (seen.has(day.date)) continue
-    seen.add(day.date)
-    merged.push(day)
+    byDate.set(day.date, day)
   }
-  merged.sort((a, b) => a.date.localeCompare(b.date))
+  const merged = Array.from(byDate.values()).sort((a, b) => a.date.localeCompare(b.date))
   const nextLast = cache.lastComputedDate && cache.lastComputedDate > newestDate
     ? cache.lastComputedDate
     : newestDate

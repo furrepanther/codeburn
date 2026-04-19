@@ -2,7 +2,7 @@ import SwiftUI
 import AppKit
 import Observation
 
-private let refreshIntervalSeconds: UInt64 = 60
+private let refreshIntervalSeconds: UInt64 = 15
 private let nanosPerSecond: UInt64 = 1_000_000_000
 private let refreshIntervalNanos: UInt64 = refreshIntervalSeconds * nanosPerSecond
 /// Fixed so the popover's anchor point doesn't shift each time today's cost changes.
@@ -28,6 +28,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private var statusItem: NSStatusItem!
     private var popover: NSPopover!
     private let store = AppStore()
+    let updateChecker = UpdateChecker()
     private var refreshTask: Task<Void, Never>?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -39,8 +40,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         setupPopover()
         observeStore()
         startRefreshLoop()
-        // Subscription is fetched lazily when the user opens the Plan pill, so the macOS
-        // Keychain prompt never fires until the user explicitly asks for it.
+        Task { await updateChecker.checkIfNeeded() }
     }
 
     /// Loads the currency code persisted by `codeburn currency` so a relaunch picks up where
@@ -73,10 +73,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         refreshTask = Task { [weak self] in
             while !Task.isCancelled {
                 guard let self else { return }
-                if self.store.selectedPeriod != .today {
-                    await self.store.refreshQuietly(period: .today)
-                }
-                // Optimize is fast (~1s warm-cache) so include findings on every refresh.
+                // Always keep the (today, all) payload warm. The menubar title and the
+                // agent tab strip both read from it, so it has to refresh every cycle
+                // regardless of whether the user is currently viewing Today or a
+                // different period / provider.
+                await self.store.refreshQuietly(period: .today)
+                // Refresh the currently-viewed payload. Optimize is fast (~1s warm-cache)
+                // so include findings on every refresh.
                 await self.store.refresh(includeOptimize: true)
                 try? await Task.sleep(nanoseconds: refreshIntervalNanos)
             }
@@ -158,6 +161,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
         let content = MenuBarContent()
             .environment(store)
+            .environment(updateChecker)
             .frame(width: popoverWidth)
 
         popover.contentViewController = NSHostingController(rootView: content)

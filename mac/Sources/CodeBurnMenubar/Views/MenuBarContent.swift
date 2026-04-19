@@ -183,22 +183,58 @@ private struct BurnFlame: View {
 }
 
 private struct Header: View {
+    @Environment(UpdateChecker.self) private var updateChecker
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 1) {
-            (
-                Text("Code").foregroundStyle(.primary)
-                + Text("Burn").foregroundStyle(Theme.brandAccent)
-            )
-            .font(.system(size: 13, weight: .semibold))
-            .tracking(-0.15)
-            Text("AI Coding Cost Tracker")
-                .font(.system(size: 10.5))
-                .foregroundStyle(.secondary)
+        HStack {
+            VStack(alignment: .leading, spacing: 1) {
+                (
+                    Text("Code").foregroundStyle(.primary)
+                    + Text("Burn").foregroundStyle(Theme.brandAccent)
+                )
+                .font(.system(size: 13, weight: .semibold))
+                .tracking(-0.15)
+                Text("AI Coding Cost Tracker")
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            if updateChecker.updateAvailable {
+                UpdateBadge()
+            }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 14)
         .padding(.top, 10)
         .padding(.bottom, 8)
+    }
+}
+
+private struct UpdateBadge: View {
+    @Environment(UpdateChecker.self) private var updateChecker
+
+    var body: some View {
+        Button {
+            updateChecker.performUpdate()
+        } label: {
+            HStack(spacing: 4) {
+                if updateChecker.isUpdating {
+                    ProgressView()
+                        .controlSize(.mini)
+                        .scaleEffect(0.7)
+                } else {
+                    Image(systemName: "arrow.down.circle.fill")
+                        .font(.system(size: 10))
+                }
+                Text(updateChecker.isUpdating ? "Updating..." : "Update")
+                    .font(.system(size: 10, weight: .medium))
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+        }
+        .buttonStyle(.borderedProminent)
+        .tint(Theme.brandAccent)
+        .controlSize(.mini)
+        .disabled(updateChecker.isUpdating)
     }
 }
 
@@ -221,7 +257,7 @@ struct FlameMark: View {
     }
 }
 
-private let starBannerGitHubURL = URL(string: "https://github.com/AgentSeal/codeburn")!
+private let starBannerGitHubURL = URL(string: "https://github.com/getagentseal/codeburn")!
 
 /// Shown at the very bottom on first launch. A small terracotta strip nudges users to star the
 /// repo; clicking opens GitHub, clicking the close icon hides it forever (persisted to
